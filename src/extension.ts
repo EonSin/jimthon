@@ -6,7 +6,7 @@ import * as vscode from 'vscode';
 // this method is called when your extension is activated
 // your extension is activated the very first time the command is executed
 export function activate(context: vscode.ExtensionContext) {
-	console.log('"jimthon" is now active.');
+	console.log('jimthon MATLAB syntax converter for Python is now active.');
 	const disposable = vscode.commands.registerCommand('jimthon.convert', function () {
 		// Get the active text editor
 		const editor = vscode.window.activeTextEditor;
@@ -28,11 +28,12 @@ export function activate(context: vscode.ExtensionContext) {
 			let output:string[] = [];
 			let proc:string = word;
 			let inStr:string = '';
+			let minAIdx = -1;
 			
 			// replace for .... =       --->  for ..... in
 			if (!alreadyUsingNP && !alreadyUsingRange && forIdx !== -1 && equalsIdx > forIdx && equalsIdx !== -1) {// && (squareIdx===-1 || squareIdx > equalsIdx)) {
-				const spaceBefore = (word.charAt(equalsIdx-1)===' ');
-				const spaceAfter = (word.charAt(equalsIdx+1)===' ');
+				const spaceBefore = (proc.charAt(equalsIdx-1)===' ');
+				const spaceAfter = (proc.charAt(equalsIdx+1)===' ');
 				if (spaceBefore && spaceAfter) {
 					inStr = 'in';
 				} else if (spaceBefore) {
@@ -42,9 +43,10 @@ export function activate(context: vscode.ExtensionContext) {
 				} else {
 					inStr = ' in ';
 				}
-				output = [word.substring(0, equalsIdx), inStr, word.substring(equalsIdx+1)];
+				output = [proc.substring(0, equalsIdx), inStr, proc.substring(equalsIdx+1)];
 				proc = output.join('');
 				output = [];
+				minAIdx = equalsIdx + inStr.length -1;
 			}
 
 			let i:number; // iteration
@@ -58,7 +60,7 @@ export function activate(context: vscode.ExtensionContext) {
 			let doNothing = true;
 			
 			if (alreadyUsingNP || alreadyUsingRange) {} // just dont do anything
-			else if (tsquareIdx===-1 || (forIdx !== -1 && tsquareIdx < forIdx)) { // no []
+			else if (tsquareIdx===-1 || (forIdx !== -1 && tsquareIdx < forIdx) || (tsquare2Idx!==-1 && tsquare2Idx < tcolonIdx) || (tsquareIdx!==-1 && tcolonIdx !==-1 && tsquareIdx > tcolonIdx)) { // no []
 				if (tcolonIdx!==-1) { // got :
 					// simple range replacement
 					let idxA:number;
@@ -68,22 +70,45 @@ export function activate(context: vscode.ExtensionContext) {
 					let careStr:string = '';
 					let cendIdx:number;
 					
-					for (i=tcolonIdx-1; i>=-1; i--) {
-						if (i===-1) {
+					let parenCt = 0;
+					let brackCt = 0;
+					for (i=tcolonIdx-1; i>=minAIdx; i--) {
+						if (i===minAIdx) {
+							let j:number;
+							for (j=i+1; j<=tcolonIdx-1; j++) {
+								if (proc.charAt(j) !== ' ') {
+									break;
+								}
+							}
+							idxA = j;
+							// idxA = i+1;
+							output.push(proc.substring(0, idxA));
+							careStr = proc.substring(idxA);
+							cendIdx = careStr.length;
+							break;
+						}
+
+						const cchar = proc.charAt(i);
+						if (cchar===')') {
+							parenCt += 1;
+						} else if (cchar==='(') {
+							parenCt -= 1;
+						}
+						else if (cchar===']') {
+							brackCt += 1;
+						}
+						else if (cchar==='[') {
+							brackCt -= 1;
+						}
+						if ((parenCt < 0 || brackCt < 0) || (parenCt===0 && brackCt===0 && cchar==='=')) {
 							idxA = i+1;
 							output.push(proc.substring(0, idxA));
 							careStr = proc.substring(idxA);
 							cendIdx = careStr.length;
 							break;
 						}
-						else if (['(', ' ', '='].includes(proc.charAt(i))) {
-							idxA = i+1;
-							output.push(proc.substring(0, idxA));
-							careStr = proc.substring(idxA);
-							cendIdx = careStr.length;
-							break;
 						}
-					}
+
 					let c1colonIdx = careStr.indexOf(':');
 					let c2colonIdx = careStr.substring(c1colonIdx+1).indexOf(':');
 					if (c2colonIdx !== -1) {
@@ -104,11 +129,41 @@ export function activate(context: vscode.ExtensionContext) {
 							}
 						}
 					}
+
+					parenCt = 0;
+					brackCt = 0;
 					for (i=idxB!+1; i<cendIdx!; i++) {
-						if ([')', ' ', ']'].includes(careStr.charAt(i))) {
+						const cchar = careStr.charAt(i);
+						if (cchar==='(') {
+							parenCt += 1;
+						} else if (cchar===')') {
+							parenCt -= 1;
+						}
+						else if (cchar==='[') {
+							brackCt += 1;
+						}
+						else if (cchar===']') {
+							brackCt -= 1;
+						}
+						
+						if (parenCt < 0 || brackCt < 0) {
 							idxBEnd = i;
 							break;
+						} else if (cchar==='#') {
+							let j:number;
+							for (j=i-1; j>=idxB!+1; j--) {
+								if (careStr.charAt(j)===' ') {
+									idxBEnd = j;
+								} else {
+									idxBEnd = j+1;
+									break;
+								}
+							}
 						}
+						// if ([')', ' ', ']'].includes(careStr.charAt(i))) {
+						// 	idxBEnd = i;
+						// 	break;
+						// }
 					}
 					
 					output.push('range(',
@@ -122,6 +177,9 @@ export function activate(context: vscode.ExtensionContext) {
 													careStr.substring(idxH!, c2colonIdx).trim(),
 													')',
 													careStr.substring(idxBEnd));
+							if (careStr.substring(idxBEnd).length===0) {
+								output.push(':');
+							}
 						}
 						else {
 							output.push(careStr.substring(idxB!).trim(),
@@ -138,6 +196,9 @@ export function activate(context: vscode.ExtensionContext) {
 							output.push(careStr.substring(idxB!, idxBEnd).trim(),
 													')',
 													careStr.substring(idxBEnd));
+							if (careStr.substring(idxBEnd).length===0) {
+								output.push(':');
+							}
 						}
 						else {
 							output.push(careStr.substring(idxB!).trim(),
@@ -257,12 +318,13 @@ export function activate(context: vscode.ExtensionContext) {
 				editor.selection = newSelection;
 
 				if (usedNP) {
+					// NOT IMPLEMENTED: will be bad if user has docstring at the top
 					// search for "import numpy as np" at the top of screen
 					// add the line "import numpy as np" at the top
 				}
 				
 				// show some completion message
-				vscode.window.showInformationMessage('converted some matlab syntax!');
+				vscode.window.showInformationMessage('jimthon: MATLAB syntax converted.');
 			}
 			// no appropriate lines to convert. add a semicolon like usual.
 			else {
@@ -270,7 +332,7 @@ export function activate(context: vscode.ExtensionContext) {
 				editor.edit(editBuilder => {
 					editBuilder.insert(position, ';');
 				});
-				vscode.window.showInformationMessage('nothing was converted.');
+				// vscode.window.showInformationMessage('nothing was converted.');
 			}
 		}
 	});
