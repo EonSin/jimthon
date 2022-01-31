@@ -20,3 +20,7 @@ for x=  tqdm ( func1(t) [ 1] :   func2[s])
 for x=  tqdm ( func1(t) [ 1] :   func2[s ]  :func3[j][k])
 
 for x  = tqdm( 1: item[1][2]  : step[2])
+
+x=[1:0.5:10]:
+
+for x=[1:0.5:10]:
