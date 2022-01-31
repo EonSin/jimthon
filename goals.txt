@@ -1,0 +1,27 @@
+loops:
+  for j = 0:h:M;
+    =>
+  for j in range(0, M, h):
+  
+  for j = [a:h:b];
+    =>
+  for j in np.arange(a, b, h)
+
+array definition without for loop:
+  blah blah asdasd = [a:h:b];
+    =>
+  blah blah asdasd = np.arange(a, b, h)
+
+1D array definition:
+  A = [1 2 3 abdaf 6];
+  A = np.array([1, 2, 3, abdaf, 6])
+  
+matrix definition: <-- not implemented
+  A = [1 2 3; 4 5 6; 7 8 9];
+  A = np.array([[1, 2, 3], [4 , 5, 6], [7, 8, 9]])
+
+  
+1. detect for loop + equals sign. replace with for loop + "in"
+2. detect square brackets. if none, replace a:h:b with range(a, b, h)
+3. if square bracket and colons: replace [a:h:b] with np.arange(a, b, h)
+4. if square bracket and no colons, no commas [a b c d]: replace with np.array
